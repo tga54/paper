@@ -1,0 +1,48 @@
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import rcParams
+import matplotlib
+matplotlib.rcParams["mathtext.fontset"] = "cm"
+plt.rcParams["font.family"] = "serif"
+
+NumTheta = 180
+NumZeta = 40
+NumNu = 30
+theta = np.arange(NumTheta)/NumTheta  # deg
+zeta = np.arange(NumZeta)/NumZeta*2*np.pi  # rad
+energy = np.logspace(11,14,30,endpoint=False)  # eV
+erg = energy*1.6e-12
+eV = np.logspace(11,14,30,endpoint=False)/1e12  # eV
+filename = "J1809_bestfit_phi33_ma0.58_s1.5_sqrte_B20_psf.dat"
+data = np.loadtxt(filename)
+data = data.reshape(NumTheta,NumZeta,NumNu) # erg / cm**2 s
+dNdE = data / erg[None,None,:]**2 # 1 / erg cm**2 s
+a = np.sum(data*theta[:,None,None]*0.00555556*0.15707963, axis=0)
+b = np.sum(a,axis=0)
+
+energy  = np.array([0.37,    0.49,    0.65,    0.87,    1.16,    1.55,    2.00,    2.73,    3.68,    4.90,    6.49,    8.66,    11.55,   15.54,   20.56])
+flux    = np.array([9.3e-12, 8.0e-12, 7.3e-12, 7.9e-12, 8.8e-12, 8.3e-12, 8.7e-12, 7.8e-12, 7.2e-12, 5.3e-12, 6.7e-12, 5.5e-12, 5.0e-12, 5.7e-12, 1.9e-12])
+flux_ul = np.array([1.1e-11, 9.7e-12, 8.8e-12, 9.4e-12, 1.0e-11, 9.6e-12, 9.9e-12, 9.1e-12, 8.4e-12, 6.5e-12, 8.0e-12, 6.8e-12, 6.2e-12, 7.1e-12, 3.1e-12])
+flux_ll = np.array([7.2e-12, 6.2e-12, 5.7e-12, 6.5e-12, 7.4e-12, 7.1e-12, 7.4e-12, 6.6e-12, 6.0e-12, 4.1e-12, 5.5e-12, 4.4e-12, 3.7e-12, 4.4e-12, 8.1e-13])
+flux_err = [flux - flux_ll, flux_ul - flux]
+energy1 = np.array([27.43,   36.60,   48.84,   64.62,   86.22])
+flux1   = np.array([3.5e-12, 3.2e-12, 2.2e-12, 2.4e-12, 2.3e-12])
+
+
+fig, ax = plt.subplots(figsize=(8,7))
+cs = 3
+ft = 20
+font = {"family": "serif", "size": ft}
+
+plt.plot(eV, b/240,label="Anisotropic diffuion model")
+plt.errorbar(energy, flux, yerr=flux_err,fmt="o", color="green", label="HESS data",capsize=cs)
+plt.errorbar(energy1, flux1, yerr=flux1/5, uplims = True, fmt="o", color="green",capsize=cs)
+plt.ylim(5e-13,2e-11)
+plt.xscale("log")
+plt.yscale("log")
+plt.xlabel("Photon Energy [TeV]", font)
+plt.ylabel(r'$\rm E^2dN/dE $ [$\rm TeV \ cm^{-2} \ s^{-1}$]',font)
+plt.legend(loc="lower left",prop=font)
+plt.xticks(fontsize=ft)
+plt.yticks(fontsize=ft)
+plt.savefig("SED.eps", format="eps",dpi=500,bbox_inches='tight')
