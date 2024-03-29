@@ -1,0 +1,111 @@
+import numpy as np
+from matplotlib import pyplot as plt
+import h5py
+
+### J2032 data ### 
+E_2032 = np.array([5.22803, 5.9491, 7.71755, 12.0335, 22.2169, 32.6012, 49.1058, \
+                   74.7376, 113.262, 170.812])
+flux_2032 = np.array([2.10871e-14, 1.43858e-14, 7.7256e-15, 4.50327e-15, 1.25287e-15, \
+                      5.68982e-16, 2.07714e-16, 5.71098e-17, 1.10936e-17, 8.67472e-19])
+flux_err_2032 = np.array([6.29059e-15, 3.33203e-15, 1.24504e-15, 4.87993e-16, 1.40316e-16,\
+                          3.76089e-17, 1.45144e-17, 4.91621e-18, 1.73155e-18, 5.15633e-19])
+itst_J2032 = flux_2032*E_2032**2*1.6
+itst_err_J2032 = flux_err_2032*E_2032**2*1.6
+E_ul_J2032 = np.array([ 253.192,])
+flux_ul_J2032 = np.array([ 4.39709e-19, ])
+itst_ul_J2032 = flux_ul_J2032*E_ul_J2032**2*1.6
+
+# J2031 data
+E_J2031 = np.array([1.92389, 3.15673, 5.01087, 8.87901, 17.2987, 29.9822, 45.8024, 70.5404, 107.699,])
+flux_J2031 = np.array([8.96893e-13, 2.57491e-13, 8.09568e-14, 2.1879e-14, 3.75611e-15, 7.23646e-16, 1.60395e-16,\
+                       2.19629e-17, 3.55024e-18])
+flux_err_J2031 = np.array([5.4999e-14, 1.64123e-14, 4.40362e-15, 1.38433e-15, 3.56751e-16, 5.21486e-17, 1.8836e-17, 5.71547e-18,\
+                           1.97427e-18])
+E_ul_J2031 = np.array([161.517, 236.641])
+flux_ul_J2031 = np.array([ 1.52286e-18, 1.70111e-18 ])
+itst_J2031 = flux_J2031*E_J2031**2*1.6
+itst_err_J2031 = flux_err_J2031*E_J2031**2*1.6
+itst_ul_J2031 = flux_ul_J2031*E_ul_J2031**2*1.6
+# itst_J2031 = flux_J2031*E_J2031**2*1.6
+# itst_J2031_err = flux_err_J2031*E_J2031**2*1.6
+
+
+######### MCMC settings ############
+path= "/home/tga/Downloads/J2032/two_sources/photon/"
+########### MCMC functions ##############
+def ECPL(pars, photon_energy):
+    amplitude = 10**pars[0]
+    index = pars[1]
+    cutoff = pars[2]
+    return amplitude*photon_energy**(-index)*np.exp(-(photon_energy/cutoff))
+
+# def ECPLB(pars, photon_energy):
+#     amplitude = 10**pars[0]
+#     index = pars[1]
+#     cutoff = pars[2]
+#     beta = pars[3]
+#     return amplitude*photon_energy**(-index)*np.exp(-(photon_energy/cutoff)**beta)
+
+def f(filename, ndim):
+    nwalkers = 2*ndim
+    nstep = 10000
+    with h5py.File(path + filename, "r") as f:
+        keys = list(f.keys())
+        a = f[keys[0]]
+        keys = list(a.keys())
+        chain = np.array(a[keys[1]])
+        log_prob = np.array(a[keys[2]])
+    chain = chain.reshape(nwalkers*nstep, ndim)
+    log_prob = log_prob.ravel()
+    log_prob_max = np.max(log_prob)
+    ind_max = np.argmax(log_prob)
+    par_max = chain[ind_max]
+    return par_max, log_prob_max
+
+par_ecpl_2032 = np.array([-12.52, 1.4, 36.0])
+par_ecpl_2032_le = np.array([0.11, 0.09, 3.01])
+par_ecpl_2032_he = np.array([0.13, 0.12, 4.47])
+par_ecpl_2032_l = par_ecpl_2032 - par_ecpl_2032_le
+par_ecpl_2032_h = par_ecpl_2032 + par_ecpl_2032_he
+
+par_ecpl_2031 = np.array([-11.21, 2.25, 30.91])
+par_ecpl_2031_le = np.array([0.04, 0.05, 4.49])
+par_ecpl_2031_he = np.array([0.03, 0.07, 3.74])
+par_ecpl_2031_l = par_ecpl_2031 - par_ecpl_2031_le
+par_ecpl_2031_h = par_ecpl_2031 + par_ecpl_2031_he
+
+########## plot fitting results #############
+pe = np.logspace(-3, 3, 60)
+ECPL_2032 = ECPL(par_ecpl_2032, pe)*pe**2
+ECPL_2032_l = ECPL(par_ecpl_2032_l, pe)*pe**2
+ECPL_2032_h = ECPL(par_ecpl_2032_h, pe)*pe**2
+ECPL_2031 = ECPL(par_ecpl_2031, pe)*pe**2
+ECPL_2031_l = ECPL(par_ecpl_2031_l, pe)*pe**2
+ECPL_2031_h = ECPL(par_ecpl_2031_h, pe)*pe**2
+
+plt.plot(pe, ECPL_2032, label="J 2032",color="blue",alpha=0.7)
+plt.fill_between(pe, ECPL_2032_l, ECPL_2032_h, color="blue",alpha=0.3,label="2032 fill")
+plt.plot(pe, ECPL_2031, label="J 2031",color="red",alpha=0.7)
+plt.fill_between(pe, ECPL_2031_l, ECPL_2031_h, color="red",alpha=0.3)
+
+plt.errorbar(E_2032,itst_J2032,yerr=itst_err_J2032,fmt="o",label="2032",color="blue")
+plt.errorbar(E_ul_J2032, itst_ul_J2032, yerr=itst_ul_J2032/3, uplims=True, color="blue",fmt="o")
+plt.errorbar(E_J2031,itst_J2031,yerr=itst_err_J2031,fmt="o",label="2031",color="red")
+plt.errorbar(E_ul_J2031, itst_ul_J2031, yerr=itst_ul_J2031/3, uplims=True, color="red",fmt="o")
+
+plt.xscale("log")
+plt.yscale("log")
+plt.ylim(1e-14,1e-11)
+plt.xlim(1e-1,1e3)
+ft = 15
+plt.xticks(fontsize=ft)
+plt.yticks(fontsize=ft)
+
+plt.xlabel("Photon Energy [TeV]", fontsize=ft)
+plt.ylabel("Energy flux [erg $cm^{-2} s^{-1}]$", fontsize=ft)
+
+plt.legend(fontsize=ft)
+#plt.show()
+#plt.savefig(path + "Photon_SED.eps", format="eps",bbox_inches="tight")
+#print(par_ecpl, chi_ecpl)
+#print(par_ecplb, chi_ecplb)
