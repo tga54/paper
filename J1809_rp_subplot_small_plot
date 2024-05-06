@@ -1,0 +1,273 @@
+import numpy as np
+
+from matplotlib import pyplot as plt
+import math
+import matplotlib.gridspec as gridspec
+
+##define parameters
+theta_bin = 300   #number of angle bins
+energy_bin = 221  #number of energy bins
+energy_hl = 7000   #higher limit of energy interested (eV)
+energy_ll = 700  #lower limit of energy interested (eV)
+erg_hl = energy_hl*1.6e-12
+erg_ll = energy_ll*1.6e-12
+
+d_pulsar = 3500   #distance from earth to pulsar (pc)
+
+## energy bin, frequency from 1e8 to 1e30, exponential  
+energy_eV = np.zeros(energy_bin)  #eV
+for i in range(energy_bin):
+    frequency = 10**(i  / 10 + 8)
+    energy_eV[i] = frequency * 4.14e-15 # eV
+#energy_erg = energy_eV * 1.6e-12   #erg
+energy_range = []       #energy range interested
+energy_index = []
+for i in range(len(energy_eV)):
+    if energy_eV[i] > energy_ll and energy_eV[i] < energy_hl:
+        energy_range.append(energy_eV[i])
+        energy_index.append(i)
+e_l = len(energy_range)  
+el = energy_index[0]
+eh = energy_index[-1]
+## convert angular distance theta to arcsec
+theta = np.arange(1,301)/300
+theta_ind = 35
+r = theta[:theta_ind]*60
+
+#path = "/Users/chaomingli/Downloads/fort/mcmc_tev"
+path = "/Users/tga/Downloads/research/J1809"
+# filename = ["DiMauro",
+#             "eta0.18p0.04b3s2.1D6e27delta0.4",
+#             "mcmcfit_kev"]
+filename = ["bestfit_tev",
+            "mcmcfit_kev"]
+# filename = ["bestfit"]
+#read and save synchron flux data to syn_dN_dE[]
+def model(filename):
+    data_syn = open(path + "/intensity_syn_h1809_" + filename + ".dat",'r')
+    da_syn=data_syn.readlines()
+    data_syn.close()
+    d_syn = []
+    for d in da_syn:
+        a = d.split()
+        d_syn.extend(a)
+    syn_f = np.zeros((theta_bin,energy_bin)) 
+    for i in range(theta_bin*energy_bin):
+        j = i // energy_bin
+        k = i % energy_bin
+        syn_f[j,k] = d_syn[i]     # erg / (cm**2 s sr)
+    
+    # syn flux + ic flux
+    flux = syn_f  # E**2 * dN / (dE dt ds domega), unit: erg / (cm**2 s sr)
+    flux_N = flux/(1.6e-12 * energy_eV) * 4*math.pi**2/360**2 /3600**2  # E*dN/dE 1/ (cm**2 s arcsec**2)
+    log_flux = np.log(flux_N[:theta_ind,el:eh])
+    log_erg = np.log(energy_eV[el:eh]*1.6e-12)
+    mean_log_erg = np.mean(log_erg)
+    mean_log_flux = np.mean(log_flux,axis=1)
+    b = np.sum((log_erg-mean_log_erg)[None,:]*(log_flux-mean_log_flux[:,None]),axis=1)/np.sum((log_erg-mean_log_erg)[None,:]**2)
+    a = mean_log_flux - b*mean_log_erg
+    itst = np.exp(a) / (b+1) *(np.power(erg_hl,b+1)-np.power(erg_ll,b+1))
+    index = 1 - b
+    return itst,index
+
+
+### calculate the intensity of powerlaw spectral 1-7 keV, dN/dE = K*E**-alpha, unit: photons / keV / cm**2 / s
+
+
+def Intensity(K, err_K, alpha, err_alpha, area, E_min=0.7, E_max=7):
+    a = 2 - alpha
+    I =  K*(E_max**a - E_min**a) / a / area * 1.602e-9
+    b = K*((E_max**a*np.log(E_max)-E_min**2*np.log(E_min))*a-(E_max**a-E_min**a))/a**2
+    err_I = np.sqrt(((E_max**a-E_min**a)*err_K/a)**2 + (b*err_alpha)**2) /area * 1.602e-9
+    return I, err_I, a
+
+itst = []
+index = []
+for i in filename:
+    m = model(i)
+    itst.append(m[0])
+    index.append(m[1])
+
+
+### stow cml, sector 3/4
+# K_stow = np.array([2.1, 1.6, 1.49, 1.78, 1.68, 1.24])*1e-5
+# alpha_stow = np.array([1.64, 1.55, 1.49, 1.74, 1.52, 1.14])
+# err_K_stow = np.array([1.4, 1.4, 1.3, 1.6, 1.9, 1.7])*1e-6
+# err_alpha_stow = np.array([7, 10, 9, 10, 12, 13])*0.01
+# area_stow = np.array([1.489, 2.258, 2.539, 3.372, 6.321, 7.69])*3600. # arcsec**2
+# I_stow = K_stow*(7**(2-alpha_stow) - 1) / (2 - alpha_stow) / area_stow * 1.602e-9
+# a_stow = 2 - alpha_stow
+# err_I_stow = np.sqrt(((7**a_stow-1)*err_K_stow/a_stow)**2 + (K_stow*7**a_stow*np.log(7)*err_alpha_stow)**2) /area_stow * 1.602e-9
+# r_stow = np.array([30, 65, 92.5, 117.5, 150, 195 ]) /60
+# err_r_stow = np.array([20, 15, 12.5, 12.5, 20, 25]) /60
+
+
+# ciao4.14 blanksky sector 270-540
+K1_b34 = np.array([2.01, 3.31, 2.34, 1.32, 1.12, 0.54])*1e-5
+alpha1_b34 = np.array([1.6,1.59,1.53,1.2,1.31,1.48])
+err_K1_b34 = np.array([1.45,2.2,2.55,2.46,2.86,3.49])*1e-6
+err_alpha1_b34 = np.array([0.07,0.07,0.11,0.17,0.25,0.67])
+area1_b34 = np.array([2.038,6.025,10.627,14.88,17.8,21.96])*3600
+r1_b34 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5])
+err_r1_b34 = np.array([0.42,0.5,0.5,0.5,0.5,0.5])
+I1_b34, err_I1_b34, a1_34 = Intensity(K1_b34, err_K1_b34, alpha1_b34, err_alpha1_b34, area1_b34)
+I1_b34_1 = I1_b34 + 8e-18
+# ciao4.14 stow background sector 270-540
+K1_stow = np.array([2.04, 3.38, 2.44, 1.45, 1.28, 0.9])*1e-5
+alpha1_stow = np.array([1.65,1.59,1.58,1.3,1.3,1.75])
+err_K1_stow = np.array([1.5,2.22,2.65,2.63,0.29,4.07])*1e-6
+err_alpha1_stow = np.array([0.08,0.07,0.12,0.18,0.22,0.53])
+area1_stow = np.array([2.038,6.025,10.627,14.88,17.8,21.96])*3600
+r1_stow = np.array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5])
+err_r1_stow = np.full((6),0.5)
+I1_stow, err_I1_stow, a1_stow = Intensity(K1_stow, err_K1_stow, alpha1_stow, err_alpha1_stow, area1_stow)
+
+# ciao4.14 blanksky snr
+K1_b7 = np.array([0.449,1.03,1.05,1.53,1.86,2.13,1.55])*1e-5
+alpha1_b7 = np.array([1.33,1.68,1.52,1.64,1.52,1.49,1.30])
+err_K1_b7 = np.array([0.91,1.32,1.41,1.74,1.92,2.09,1.91])*1e-6
+err_alpha1_b7 = np.array([0.19,0.14,0.14,0.12,0.11,0.1,0.12])
+r1_b7 = np.array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5,6.5])
+area1_b7 = np.array([0.55,1.61,2.72,3.66,5,5.74,5.99])*3600
+err_r1_b7 = np.full((7),0.5)
+I1_b7, err_I1_b7, a1_7 = Intensity(K1_b7, err_K1_b7, alpha1_b7, err_alpha1_b7, area1_b7)
+
+# ciao4.14 stow snr
+K1_stow7 = np.array([0.452, 1.13, 1.26, 1.57, 2.17, 2.27, 1.48])*1e-5
+alpha1_stow7 = np.array([1.35, 1.75, 1.67, 1.74, 1.59, 1.5, 1.19])
+err_K1_stow7 = np.array([0.932, 1.38, 1.54, 1.85, 2.01, 2.12, 1.82])*1e-6
+err_alpha1_stow7 = np.array([0.19, 0.14, 0.13, 0.13, 0.1, 0.1, 0.11])
+r1_stow7 = np.array([0.5, 1.5, 2.5, 3.5, 4.5, 5.5,6.5])
+area1_stow7 = np.array([0.55,1.61,2.72,3.66,5,5.74,5.99])*3600
+err_r1_stow7 = np.full((7),0.5)
+I1_stow7, err_I1_stow7, a1_stow7 = Intensity(K1_stow7, err_K1_stow7, alpha1_stow7, err_alpha1_stow7, area1_stow7)
+
+# ciao4.14 blanksky lbg:w31 pwn
+K2_b34 = np.array([2.79,5.58,6.31,6.99,8.01,8.68,10.7])*1e-5
+alpha2_b34 = np.array([1.76,1.82,1.94,2.01,2.11,2.21,2.37])
+err_K2_b34 = np.array([1.57,2.47,3.14,3.77,4.35,5.07,6.38])*1e-6
+err_alpha2_b34 = np.array([0.06,0.05,0.06,0.07,0.08,0.08,0.09])
+area2_b34 = np.array([2.038,6.025,10.627,14.88,17.77,21.96,27.53])*3600
+r2_b34 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5,6.5])
+err_r2_b34 = np.full((7),0.5)
+I2_b34, err_I2_b34, a2_34 = Intensity(K2_b34, err_K2_b34, alpha2_b34, err_alpha2_b34, area2_b34)
+
+# ciao4.14 blanksky lbg:w31 snr
+K2_b7 = np.array([0.642,1.64,2.04,2.92,3.7,4.25])*1e-5
+alpha2_b7 = np.array([1.52,1.89,1.82,1.94,1.84,1.81])
+err_K2_b7 = np.array([1.03,1.47,1.65,2.03,2.28,2.47])*1e-6
+err_alpha2_b7 = np.array([0.16,0.11,0.1,0.09,0.07,0.07])
+area2_b7 = np.array([0.549,1.6056,2.721,3.66,5,5.74])*3600
+r2_b7 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5])
+err_r2_b7 = np.full((6),0.5)
+I2_b7, err_I2_b7, a2_b7 = Intensity(K2_b7, err_K2_b7, alpha2_b7, err_alpha2_b7, area2_b7)
+
+
+# ciao4.14 blanksky lbg:w31+w33+m17  pwn
+K3_b34 = np.array([2.64,5.09,5.42,5.8,6.52,6.79,8.39])*1e-5
+alpha3_b34 = np.array([1.77,1.84,1.99,2.09,2.22,2.35,2.59])
+err_K3_b34 = np.array([1.58,2.5,3.22,3.93,4.59,5.45,7.11])*1e-6
+err_alpha3_b34 = np.array([7,6,8,9,10,12,14])*0.01
+area3_b34 = np.array([2.038,6.025,10.627,14.88,17.77,21.96,27.53])*3600
+r3_b34 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5,6.5])
+err_r3_b34 = np.array([0.42,0.5,0.5,0.5,0.5,0.5,0.5])
+I3_b34, err_I3_b34, a3_34 = Intensity(K3_b34, err_K3_b34, alpha3_b34, err_alpha3_b34, area3_b34)
+
+# ciao4.14 blanksky lbg:w31+w33+m17  snr
+K3_b7 = np.array([0.617,1.53,1.84,2.64,3.34,3.83,3.3])*1e-5
+alpha3_b7 = np.array([1.54,1.93,1.86,1.99,1.88,1.85,1.77])
+err_K3_b7 = np.array([1.04,1.5,1.68,2.08,2.32,2.52,2.5])*1e-6
+err_alpha3_b7 = np.array([0.17,0.12,0.11,0.1,0.08,0.08,0.09])
+area3_b7 = np.array([0.549,1.6056,2.721,3.66,5,5.74,5.99])*3600
+r3_b7 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5,6.5])
+err_r3_b7 = np.array([0.42,0.5,0.5,0.5,0.5,0.5,0.5])
+I3_b7, err_I3_b7, a3_b7 = Intensity(K3_b7, err_K3_b7, alpha3_b7, err_alpha3_b7, area3_b7)
+
+# ciao4.14 blanksky lbg:w31+m17  pwn
+K4_b34 = np.array([2.79,5.56,6.27,6.99,8.0,8.62])*1e-5
+alpha4_b34 = np.array([1.78,1.85,1.99,2.08,2.20,2.30])
+err_K4_b34 = np.array([1.6,2.5,3.2,3.9,4.5,5.3])*1e-6
+err_alpha4_b34 = np.array([6,5,7,8,8,9])*0.01
+area4_b34 = np.array([2.038,6.025,10.627,14.88,17.77,21.96])*3600
+r4_b34 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5])
+err_r4_b34 = np.array([0.42,0.5,0.5,0.5,0.5,0.5])
+I4_b34, err_I4_b34, a4_b34 = Intensity(K4_b34, err_K4_b34, alpha4_b34, err_alpha4_b34, area4_b34)
+
+# ciao4.15 blanksky lbg:m17 pwn
+K5_b34 = np.array([2.78, 5.49, 6.15, 6.83, 7.77, 8.33])*1e-5
+alpha5_b34 = np.array([1.79, 1.87, 2.01, 2.11, 2.23, 2.33])
+err_K5_b34 = np.array([1.6, 2.5, 3.3, 4, 4.6, 5.4])*1e-6
+err_alpha5_b34 = np.array([6, 6, 7, 8, 9, 10])*0.01
+area5_b34 = np.array([2.038,6.025,10.627,14.88,17.77,21.96])*3600
+r5_b34 = np.array([0.55, 1.5, 2.5, 3.5, 4.5, 5.5])
+err_r5_b34 = np.array([0.42,0.5,0.5,0.5,0.5,0.5])
+I5_b34, err_I5_b34, a5_b34 = Intensity(K5_b34, err_K5_b34, alpha5_b34, err_alpha5_b34, area5_b34)
+
+
+
+# ciao 4.14 pure powerlaw
+I_pl = np.array([16.1,11.2,7.59,6.51,5.94,5.22])*1e-18
+alpha_pl = np.array([1.59,1.58,1.55,1.47,1.51,1.54])
+
+fig = plt.figure(figsize=(6,8))
+gs = gridspec.GridSpec(3,1)
+color = ['orange','red','magenta','green','yellow','purple','cyan','blue','black']
+c1 = ['#0c39b1','#d31867','#d2881c']
+cs = 3
+ax1 = fig.add_subplot(gs[:2])
+ax1.errorbar(r1_b34, I1_b34, xerr = err_r1_b34, yerr = err_I1_b34, fmt='sb', label="Local bkg" , capsize = cs,color=c1[0])
+#plt.errorbar(r1_b34, I1_b34_1, xerr = err_r1_b34, yerr = err_I1_b34, fmt='o', color = 'skyblue', label="Local1" )
+# plt.errorbar(r2_b34[:-1], I2_b34[:-1], xerr = err_r2_b34[:-1], yerr = err_I2_b34[:-1], fmt='o', color = 'cyan', label="Nearby W31" )
+
+ax1.errorbar(r3_b34[:-1], I3_b34[:-1], xerr = err_r3_b34[:-1], yerr = err_I3_b34[:-1], fmt='sg', label="Nearby bkg",
+             capsize = cs )
+# plt.errorbar(r4_b34, I4_b34, xerr = err_r4_b34, yerr = err_I4_b34, fmt='o', color = 'black', label="Nearby W31+M17" )
+# plt.errorbar(r5_b34, I5_b34, xerr = err_r5_b34, yerr = err_I5_b34, fmt='o', color = 'orange', label="Nearby M17" )
+
+# plt.scatter(r4_b34,I_pl,color="purple",label="powerlaw",marker="x",s=100)
+#plt.errorbar(r3_b7, I3_b7, xerr = err_r3_b7, yerr = err_I3_b7, fmt='o', color = 'red', label="Nearby background snr" )
+
+
+label = ["Best fit of TeV","Best fit of keV","kev linear","mcmc_kev"]
+font1 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 17}
+font2 = {'family': 'Times New Roman', 'weight': 'normal', 'size': 10}
+
+for i in range(len(filename)):
+    ax1.plot(r,itst[i],color=c1[i+1],label=label[i])
+# plt.yscale("log")
+plt.ylabel(r' Intensity [$\rm erg \, cm^{-2} \, s^{-1} \, arcsec^{-2}$]',font1)
+plt.legend(loc="upper right",fontsize=10,ncol=2)
+plt.xticks(fontsize=15)
+plt.yticks(fontsize=15)
+
+left,bottom,width,height=0.5,0.58,0.35,0.2   #表示从整张图的左边10%，下边10%的位置开始，宽度、高度分别是是整个图的80%
+ax3=fig.add_axes([left,bottom,width,height])
+ax3.set_title('HESS TeV profile',x=0.5,y=0.8,font=font2)
+ax3.plot(theta_tev[:290], itst_tev[0],color='#d2881c', label="Best-fit of TeV")
+ax3.errorbar(h_radius,h_flux,yerr=h_flux_err,fmt='sc',label = "HGPS data",capsize = cs)
+plt.xlabel('Distance to pulsar [deg]',font2)
+plt.ylabel(r'$\frac{dN}{dE}$  [$\rm 1/cm^2/s/deg^2$]',font2)
+plt.legend(loc="center right")
+
+ax2 = fig.add_subplot(gs[2:])
+
+ax2.errorbar(r1_b34, alpha1_b34, xerr = err_r1_b34, yerr = err_alpha1_b34, fmt='sb', label="Local bkg", capsize = cs,color=c1[0])
+# plt.errorbar(r2_b34[:-1], alpha2_b34[:-1], xerr = err_r2_b34[:-1], yerr = err_alpha2_b34[:-1], fmt='o', color = 'cyan', label="Nearby W31" )
+ax2.errorbar(r3_b34[:-1], alpha3_b34[:-1], xerr = err_r3_b34[:-1], yerr = err_alpha3_b34[:-1], fmt='sg', 
+             label="Nearby bkg", capsize = cs )
+# plt.errorbar(r4_b34, alpha4_b34, xerr = err_r4_b34, yerr = err_alpha4_b34, fmt='o', color = 'black', label="Nearby W31+M17" )
+# plt.errorbar(r5_b34, alpha5_b34, xerr = err_r5_b34, yerr = err_alpha4_b34, fmt='o', color = 'orange', label="Nearby M17" )
+
+# plt.scatter(r4_b34,alpha_pl,color="purple",label="powerlaw",marker="x",s=100)
+
+for i in range(len(filename)):
+    ax2.plot(r,index[i],color=c1[i+1],label=label[i])
+
+
+plt.xlabel(r'Distance to pulsar [Arcmin]', font1)
+plt.ylabel("Photon index", font1)
+#plt.legend(loc="lower left",fontsize=13,ncol=2,facecolor="None")
+#plt.ylim(1e-19,1e-16)
+plt.yticks(fontsize=15)
+plt.xticks(fontsize=15)
+plt.savefig("J1809_multiwavlength.eps",format="eps",bbox_inches="tight")
